@@ -6,9 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Camera, Check, X } from "lucide-react";
+import { Camera, Check, X, Sun, Moon } from "lucide-react";
 
-// Types
+// -------------------- Types --------------------
 type UserRole = "admin" | "employee";
 type TaskStatus = "pending" | "completed";
 
@@ -37,7 +37,7 @@ interface Photo {
   createdAt: string;
 }
 
-// Mock data
+// -------------------- Mock Data --------------------
 const mockUsers: User[] = [
   { id: crypto.randomUUID(), name: "Admin User", email: "admin@example.com", password: "admin123", role: "admin" },
   { id: crypto.randomUUID(), name: "John Employee", email: "john@example.com", password: "john123", role: "employee" },
@@ -63,11 +63,13 @@ export default function PhotoRepositoryApp() {
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [photoDescription, setPhotoDescription] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("environment");
 
   // -------------------- UI State --------------------
   const [activeTab, setActiveTab] = useState<"dashboard" | "tasks" | "photos">("dashboard");
   const [adminNotifications, setAdminNotifications] = useState<string[]>([]);
   const [employeeNotifications, setEmployeeNotifications] = useState<string[]>([]);
+  const [darkTheme, setDarkTheme] = useState(false);
 
   // -------------------- Notifications --------------------
   const addNotification = (msg: string, to: "admin" | "employee" = "admin") => {
@@ -93,7 +95,7 @@ export default function PhotoRepositoryApp() {
       setEmail("");
       setPassword("");
     } else {
-      addNotification("Invalid credentials", currentUser?.role || "admin");
+      addNotification("Invalid credentials", "admin");
     }
   };
 
@@ -128,15 +130,15 @@ export default function PhotoRepositoryApp() {
     };
     setTasks(prev => [...prev, task]);
     setNewTask({ title: "", description: "", assignedTo: "" });
-    addNotification(`Task "${task.title}" assigned to ${users.find(u=>u.id===task.assignedTo)?.name}`, "admin");
+    addNotification(`Task "${task.title}" assigned to ${users.find(u => u.id === task.assignedTo)?.name}`, "admin");
     addNotification(`New task assigned: "${task.title}"`, "employee");
   };
 
   // -------------------- Camera Functions --------------------
-  const startCamera = async () => {
+  const startCamera = async (facing: "user" | "environment" = "environment") => {
     try {
       if (videoRef.current) {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } });
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
@@ -145,24 +147,23 @@ export default function PhotoRepositoryApp() {
     }
   };
 
-  const capturePhoto = () => {
-    if (!videoRef.current) return;
-    const video = videoRef.current;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      setCapturedPhoto(canvas.toDataURL("image/png"));
-      stopCamera();
+  const stopCamera = () => {
+    if (videoRef.current?.srcObject) {
+      (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
     }
   };
 
-  const stopCamera = () => {
-    if (videoRef.current?.srcObject) {
-      (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
-      videoRef.current.srcObject = null;
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      setCapturedPhoto(canvas.toDataURL("image/png"));
+      stopCamera();
     }
   };
 
@@ -198,10 +199,10 @@ export default function PhotoRepositoryApp() {
   const employeePhotos = useMemo(() => photos.filter(p => p.uploadedBy === currentUser?.id), [photos, currentUser]);
   const employeeTasks = useMemo(() => tasks.filter(t => t.assignedTo === currentUser?.id), [tasks, currentUser]);
 
-  // -------------------- Render Login --------------------
+  // -------------------- Login --------------------
   if (!currentUser) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-blue-50 p-4">
+      <div className={`${darkTheme ? "bg-gray-900 text-white" : "bg-blue-50 text-black"} min-h-screen flex items-center justify-center p-4`}>
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="mx-auto bg-gray-200 border-2 border-dashed rounded-xl w-16 h-16 flex items-center justify-center mb-4">
@@ -228,10 +229,15 @@ export default function PhotoRepositoryApp() {
   // -------------------- Admin Dashboard --------------------
   if (currentUser.role === "admin") {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className={`${darkTheme ? "bg-gray-900 text-white" : "bg-gray-50 text-black"} min-h-screen`}>
         <header className="bg-white shadow p-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-          <Button variant="outline" onClick={handleLogout}>Logout</Button>
+          <div className="flex items-center space-x-2">
+            <Button onClick={() => setDarkTheme(!darkTheme)} variant="outline">
+              {darkTheme ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+            <Button variant="outline" onClick={handleLogout}>Logout</Button>
+          </div>
         </header>
 
         <main className="p-4 space-y-8">
@@ -322,10 +328,15 @@ export default function PhotoRepositoryApp() {
 
   // -------------------- Employee Dashboard --------------------
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`${darkTheme ? "bg-gray-900 text-white" : "bg-gray-50 text-black"} min-h-screen`}>
       <header className="bg-white shadow p-4 flex justify-between items-center">
         <h1 className="text-2xl font-bold">Employee Dashboard</h1>
-        <Button variant="outline" onClick={handleLogout}>Logout</Button>
+        <div className="flex items-center space-x-2">
+          <Button onClick={() => setDarkTheme(!darkTheme)} variant="outline">
+            {darkTheme ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+          <Button variant="outline" onClick={handleLogout}>Logout</Button>
+        </div>
       </header>
 
       {/* Tabs */}
@@ -338,6 +349,7 @@ export default function PhotoRepositoryApp() {
       </nav>
 
       <main className="p-4 space-y-6">
+        {/* -------------------- Dashboard (Capture Photo) -------------------- */}
         {activeTab === "dashboard" && (
           <Card>
             <CardHeader><CardTitle>Capture Photo</CardTitle></CardHeader>
@@ -346,14 +358,29 @@ export default function PhotoRepositoryApp() {
                 <div className="space-y-4 text-center">
                   <video ref={videoRef} className="mx-auto w-64 h-48 border-2 rounded-lg" />
                   <div className="flex space-x-2 justify-center">
-                    <Button onClick={startCamera}>Start Camera</Button>
+                    <Button onClick={() => startCamera(cameraFacing)}>Start Camera</Button>
                     <Button onClick={capturePhoto}>Capture</Button>
+                    <Button
+                      onClick={() => {
+                        stopCamera();
+                        const newFacing = cameraFacing === "user" ? "environment" : "user";
+                        setCameraFacing(newFacing);
+                        startCamera(newFacing);
+                      }}
+                    >
+                      Switch Camera
+                    </Button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <img src={capturedPhoto} className="w-full h-64 object-cover rounded-lg" />
-                  <Textarea placeholder="Add description" value={photoDescription} onChange={e => setPhotoDescription(e.target.value)} rows={3} />
+                  <Textarea
+                    placeholder="Add description"
+                    value={photoDescription}
+                    onChange={e => setPhotoDescription(e.target.value)}
+                    rows={3}
+                  />
                   <div className="flex space-x-2">
                     <Button onClick={handleSavePhoto}><Check className="mr-2 h-4 w-4" />Save</Button>
                     <Button variant="outline" onClick={() => setCapturedPhoto(null)}><X className="mr-2 h-4 w-4" />Cancel</Button>
@@ -362,7 +389,7 @@ export default function PhotoRepositoryApp() {
               )}
             </CardContent>
 
-            {employeePhotos.length > 0 &&
+            {employeePhotos.length > 0 && (
               <CardContent>
                 <h2 className="text-lg font-semibold mb-2">Recent Photos</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -374,10 +401,11 @@ export default function PhotoRepositoryApp() {
                   ))}
                 </div>
               </CardContent>
-            }
+            )}
           </Card>
         )}
 
+        {/* -------------------- My Tasks -------------------- */}
         {activeTab === "tasks" && (
           <Card>
             <CardHeader><CardTitle>My Tasks</CardTitle></CardHeader>
@@ -400,6 +428,7 @@ export default function PhotoRepositoryApp() {
           </Card>
         )}
 
+        {/* -------------------- My Photos -------------------- */}
         {activeTab === "photos" && (
           <Card>
             <CardHeader><CardTitle>My Photos</CardTitle></CardHeader>
@@ -419,7 +448,7 @@ export default function PhotoRepositoryApp() {
         )}
       </main>
 
-      {/* Notifications */}
+      {/* -------------------- Notifications -------------------- */}
       {employeeNotifications.length > 0 &&
         <div className="fixed top-4 right-4 space-y-2">
           {employeeNotifications.map((note, i) => (
